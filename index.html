@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consumer Spending & Economic Stress Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #10141a;
+    --surface2: #161c24;
+    --border: #1e2730;
+    --accent: #e8ff47;
+    --accent2: #47c8ff;
+    --accent3: #ff6b6b;
+    --accent4: #b47fff;
+    --accent5: #47ffb4;
+    --text: #e8edf4;
+    --text-muted: #6b7a8d;
+    --recession: rgba(255,107,107,0.15);
+    --food: #e8ff47;
+    --housing: #47c8ff;
+    --medical: #ff6b6b;
+    --transport: #b47fff;
+    --recreation: #47ffb4;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ─── NOISE OVERLAY ─── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    position: relative;
+    padding: 60px 48px 40px;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    z-index: 1;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(232,255,71,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header-tag {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+    opacity: 0.8;
+  }
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 4vw, 52px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    max-width: 700px;
+  }
+  h1 span { color: var(--accent); }
+  .header-meta {
+    display: flex;
+    gap: 32px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .meta-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-muted); }
+  .meta-value { font-size: 12px; color: var(--accent); }
+
+  /* ─── NAV ─── */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,12,15,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 48px;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+  }
+  nav a {
+    display: block;
+    padding: 14px 20px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  nav a:hover, nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ─── MAIN LAYOUT ─── */
+  main { padding: 48px; max-width: 1400px; margin: 0 auto; position: relative; z-index: 1; }
+
+  /* ─── SECTION ─── */
+  section { margin-bottom: 80px; scroll-margin-top: 70px; }
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-num {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    opacity: 0.6;
+  }
+  h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .section-desc {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: -24px;
+    margin-bottom: 28px;
+    max-width: 600px;
+    line-height: 1.7;
+  }
+
+  /* ─── KPI CARDS ─── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kpi-card:hover { border-color: var(--accent); }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--kpi-color, var(--accent));
+  }
+  .kpi-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+  .kpi-value { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--kpi-color, var(--accent)); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+  /* ─── CHART CARDS ─── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  .chart-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .chart-subtitle { font-size: 11px; color: var(--text-muted); margin-bottom: 24px; }
+  .chart-wrap { position: relative; }
+
+  .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .chart-grid-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+
+  /* ─── CONTROLS ─── */
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+  .control-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-muted); margin-right: 4px; }
+  .btn {
+    padding: 6px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+  select {
+    padding: 6px 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+  }
+  select:focus { border-color: var(--accent); }
+
+  /* ─── LEGEND ─── */
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-line { width: 20px; height: 2px; flex-shrink: 0; }
+
+  /* ─── RECESSION BADGE ─── */
+  .recession-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    background: rgba(255,107,107,0.1);
+    border: 1px solid rgba(255,107,107,0.3);
+    color: var(--accent3);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .recession-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent3); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* ─── DATA TABLE ─── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .data-table th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+  .data-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  .data-table tr:hover td { background: var(--surface2); }
+  .data-table .num { font-variant-numeric: tabular-nums; }
+  .bar-cell { display: flex; align-items: center; gap: 12px; }
+  .bar-bg { flex: 1; height: 4px; background: var(--border); }
+  .bar-fill { height: 100%; transition: width 0.4s; }
+  .tag-essential { padding: 2px 8px; background: rgba(71,200,255,0.1); border: 1px solid rgba(71,200,255,0.3); color: var(--accent2); font-size: 10px; }
+  .tag-discretionary { padding: 2px 8px; background: rgba(180,127,255,0.1); border: 1px solid rgba(180,127,255,0.3); color: var(--accent4); font-size: 10px; }
+
+  /* ─── SPARKLINES ─── */
+  .sparkline-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+  }
+  .sparkline-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    transition: border-color 0.2s;
+  }
+  .sparkline-card:hover { border-color: var(--accent); }
+  .spark-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+  .spark-value { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+  .spark-change { font-size: 11px; }
+  .spark-change.up { color: var(--accent3); }
+  .spark-change.down { color: var(--accent5); }
+
+  /* ─── ABOUT SECTION ─── */
+  .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .about-card { background: var(--surface); border: 1px solid var(--border); padding: 28px 32px; }
+  .about-card h3 { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; margin-bottom: 14px; color: var(--accent); }
+  .about-card p { font-size: 12px; color: var(--text-muted); line-height: 1.8; }
+  .team-list { list-style: none; margin-top: 12px; }
+  .team-list li { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; display: flex; justify-content: space-between; }
+  .team-list li:last-child { border-bottom: none; }
+  .team-role { color: var(--text-muted); font-size: 11px; }
+  .tech-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 4px 4px 4px 0;
+  }
+
+  /* ─── FOOTER ─── */
+  footer {
+    position: relative; z-index: 1;
+    border-top: 1px solid var(--border);
+    padding: 32px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  footer .brand { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--accent); }
+  footer p { font-size: 11px; color: var(--text-muted); }
+  footer a { color: var(--accent2); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ─── ANIMATIONS ─── */
+  .fade-in { opacity: 0; transform: translateY(16px); animation: fadeIn 0.5s ease forwards; }
+  @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+  .fade-in:nth-child(1) { animation-delay: 0.05s; }
+  .fade-in:nth-child(2) { animation-delay: 0.1s; }
+  .fade-in:nth-child(3) { animation-delay: 0.15s; }
+  .fade-in:nth-child(4) { animation-delay: 0.2s; }
+  .fade-in:nth-child(5) { animation-delay: 0.25s; }
+
+  @media (max-width: 768px) {
+    header, main, footer { padding: 24px; }
+    nav { padding: 0 24px; }
+    .chart-grid-2, .chart-grid-3, .about-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-tag">DSCI-D532 · Spring 2026 · Final Project</div>
+  <h1>Consumer Spending &<br><span>Economic Stress</span> Tracker</h1>
+  <div class="header-meta">
+    <div class="meta-item">
+      <span class="meta-label">Dataset</span>
+      <span class="meta-value">BLS CPI 1935–2017</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Records</span>
+      <span class="meta-value">3,289 CPI rows</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Categories</span>
+      <span class="meta-value">5 Spending Groups</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Team</span>
+      <span class="meta-value">Pradhan · Joshi · Mhatre</span>
+    </div>
+  </div>
+</header>
+
+<nav id="main-nav">
+  <a href="#overview" class="active">Overview</a>
+  <a href="#trends">CPI Trends</a>
+  <a href="#recession">Recession Impact</a>
+  <a href="#economic">Economic Indicators</a>
+  <a href="#yoy">YOY Growth</a>
+  <a href="#about">About</a>
+</nav>
+
+<main>
+
+  <!-- ─── OVERVIEW ─── -->
+  <section id="overview">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2>Overview</h2>
+    </div>
+    <p class="section-desc">Key statistics from the U.S. Bureau of Labor Statistics Consumer Price Index dataset, spanning 82 years of American spending patterns across 5 major categories.</p>
+
+    <div class="kpi-grid" id="kpi-grid"></div>
+
+    <div class="chart-card">
+      <div class="chart-title">CPI by Category — Full Historical View (1935–2017)</div>
+      <div class="chart-subtitle">Annual average CPI index values. Shaded bands indicate recession periods.</div>
+      <div class="controls">
+        <span class="control-label">Category:</span>
+        <button class="btn active" data-cat="all" onclick="filterOverview('all',this)">All</button>
+        <button class="btn" data-cat="Food & Beverage" onclick="filterOverview('Food & Beverage',this)">Food</button>
+        <button class="btn" data-cat="Housing" onclick="filterOverview('Housing',this)">Housing</button>
+        <button class="btn" data-cat="Medical Care" onclick="filterOverview('Medical Care',this)">Medical</button>
+        <button class="btn" data-cat="Transportation" onclick="filterOverview('Transportation',this)">Transport</button>
+        <button class="btn" data-cat="Recreation" onclick="filterOverview('Recreation',this)">Recreation</button>
+      </div>
+      <div class="chart-wrap" style="height:360px">
+        <canvas id="overviewChart"></canvas>
+      </div>
+      <div class="legend" id="overview-legend"></div>
+    </div>
+  </section>
+
+  <!-- ─── TRENDS ─── -->
+  <section id="trends">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2>CPI Trends</h2>
+    </div>
+    <p class="section-desc">Explore how each spending category evolved over time. Medical Care has seen the steepest growth, far outpacing inflation in other categories.</p>
+
+    <div class="sparkline-grid" id="sparklines"></div>
+
+    <div style="margin-top:24px;" class="chart-card">
+      <div class="chart-title">Indexed Growth (Base Year = 1967, all categories set to 100)</div>
+      <div class="chart-subtitle">Normalized to 1967 baseline to compare relative growth rates across categories.</div>
+      <div class="chart-wrap" style="height:320px">
+        <canvas id="indexedChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── RECESSION ─── -->
+  <section id="recession">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2>Recession Impact</h2>
+    </div>
+    <p class="section-desc">Comparing average CPI levels during recession periods vs. normal periods. Higher recession CPI reflects that later recessions (Great Recession 2007–09) occurred when prices were already elevated.</p>
+
+    <div class="chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Average CPI: Recession vs Normal Periods</div>
+        <div class="chart-subtitle">All available US city average data</div>
+        <div class="chart-wrap" style="height:280px">
+          <canvas id="recessionBarChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Recession Spending Mix</div>
+        <div class="chart-subtitle">Average CPI distribution during recessions</div>
+        <div class="chart-wrap" style="height:280px">
+          <canvas id="recessionPieChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-top:0">
+      <div class="chart-title">Category Comparison Table</div>
+      <div class="chart-subtitle">CPI during recession vs normal economic periods</div>
+      <table class="data-table" id="recession-table"></table>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Great Recession Zoom: Monthly CPI (2006–2011)</div>
+      <div class="chart-subtitle">Monthly data during and around the 2007–2009 recession. Shaded area = recession months.</div>
+      <div class="controls">
+        <span class="control-label">Category:</span>
+        <select id="recession-zoom-cat" onchange="updateRecessionZoom()">
+          <option>Food & Beverage</option>
+          <option>Housing</option>
+          <option>Medical Care</option>
+          <option>Transportation</option>
+          <option>Recreation</option>
+        </select>
+      </div>
+      <div class="chart-wrap" style="height:260px">
+        <canvas id="recessionZoomChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── ECONOMIC INDICATORS ─── -->
+  <section id="economic">
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <h2>Economic Indicators</h2>
+    </div>
+    <p class="section-desc">Unemployment rate and GDP growth rate sourced from FRED, 1967–2017. Recession years clearly correlate with unemployment spikes and negative GDP growth.</p>
+
+    <div class="chart-card">
+      <div class="chart-title">Unemployment Rate & GDP Growth (1967–2017)</div>
+      <div class="chart-subtitle">Dual-axis chart: unemployment % (left) · GDP growth % (right) · shaded = recession years</div>
+      <div class="chart-wrap" style="height:320px">
+        <canvas id="econChart"></canvas>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-line" style="background:#47c8ff"></span>Unemployment Rate (%)</div>
+        <div class="legend-item"><span class="legend-line" style="background:#47ffb4"></span>GDP Growth Rate (%)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:rgba(255,107,107,0.5)"></span>Recession Year</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Average CPI vs Unemployment Rate (1967–2017)</div>
+      <div class="chart-subtitle">Scatter plot showing relationship between spending levels and unemployment. Recession years highlighted.</div>
+      <div class="chart-wrap" style="height:300px">
+        <canvas id="scatterChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── YOY ─── -->
+  <section id="yoy">
+    <div class="section-header">
+      <span class="section-num">05</span>
+      <h2>Year-over-Year Growth</h2>
+    </div>
+    <p class="section-desc">Annual percentage change in CPI for each category. Highlights inflation peaks (1970s oil crisis), the Great Recession, and the long-run medical care cost surge.</p>
+
+    <div class="chart-card">
+      <div class="chart-title">YOY CPI % Change by Category</div>
+      <div class="chart-subtitle">January CPI values used for consistent year-over-year comparison</div>
+      <div class="controls">
+        <span class="control-label">Category:</span>
+        <select id="yoy-cat-select" onchange="updateYOY()">
+          <option>Food & Beverage</option>
+          <option>Housing</option>
+          <option>Medical Care</option>
+          <option>Transportation</option>
+          <option>Recreation</option>
+        </select>
+        <span class="control-label" style="margin-left:16px">View:</span>
+        <button class="btn active" onclick="setYOYView('bar',this)">Bar</button>
+        <button class="btn" onclick="setYOYView('line',this)">Line</button>
+      </div>
+      <div class="chart-wrap" style="height:300px">
+        <canvas id="yoyChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Top 10 Highest Inflation Years by Category</div>
+      <div class="chart-subtitle">Years with largest year-over-year CPI increase (January values)</div>
+      <div class="controls">
+        <span class="control-label">Category:</span>
+        <select id="top-cat-select" onchange="updateTopInflation()">
+          <option>Medical Care</option>
+          <option>Food & Beverage</option>
+          <option>Housing</option>
+          <option>Transportation</option>
+          <option>Recreation</option>
+        </select>
+      </div>
+      <table class="data-table" id="top-inflation-table"></table>
+    </div>
+  </section>
+
+  <!-- ─── ABOUT ─── -->
+  <section id="about">
+    <div class="section-header">
+      <span class="section-num">06</span>
+      <h2>About This Project</h2>
+    </div>
+
+    <div class="about-grid">
+      <div class="about-card">
+        <h3>Project Overview</h3>
+        <p>This dashboard is the final deliverable for DSCI-D532 (Data Management for Data Science), Spring 2026. The project built a normalized star schema SQLite database from raw BLS Consumer Price Index data and FRED economic indicators, then visualized the results in this interactive web dashboard.</p>
+        <br>
+        <p>The database uses a star schema with two fact tables (fact_cpi, fact_economic_indicators) and four dimension tables (dim_date, dim_category, dim_area, dim_series).</p>
+      </div>
+      <div class="about-card">
+        <h3>Team</h3>
+        <ul class="team-list">
+          <li><span>Duhita Pradhan</span><span class="team-role">Schema Design · DDL · CRUD</span></li>
+          <li><span>Jahanvi Joshi</span><span class="team-role">Data Insertion · dim_series · Analytical Queries</span></li>
+          <li><span>Sudhiksha Mhatre</span><span class="team-role">CPI Pipeline · Colab Notebook · Report</span></li>
+        </ul>
+      </div>
+      <div class="about-card">
+        <h3>Data Sources</h3>
+        <p>CPI data from the U.S. Bureau of Labor Statistics (Kaggle, CC0 Public Domain). Economic indicators from FRED Economic Data. Recession periods from NBER business cycle dating.</p>
+        <br>
+        <p>Coverage: 1935–2017 for CPI · 1967–2017 for economic indicators · 3,289 CPI rows · 51 annual economic snapshots.</p>
+      </div>
+      <div class="about-card">
+        <h3>Technology Stack</h3>
+        <p>Backend pipeline and database:</p>
+        <div style="margin-top:12px">
+          <span class="tech-badge">SQLite</span>
+          <span class="tech-badge">Python 3</span>
+          <span class="tech-badge">pandas</span>
+          <span class="tech-badge">Google Colab</span>
+          <span class="tech-badge">sqlite3</span>
+        </div>
+        <p style="margin-top:16px">Frontend dashboard:</p>
+        <div style="margin-top:12px">
+          <span class="tech-badge">HTML5</span>
+          <span class="tech-badge">CSS3</span>
+          <span class="tech-badge">Chart.js 4</span>
+          <span class="tech-badge">Vanilla JS</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div>
+    <div class="brand">Consumer Spending & Economic Stress Tracker</div>
+    <p style="margin-top:6px">DSCI-D532 · Indiana University · Spring 2026</p>
+  </div>
+  <div style="text-align:right">
+    <p>Data: <a href="https://www.kaggle.com/datasets/bls/consumer-price-index" target="_blank">BLS via Kaggle</a> · <a href="https://fred.stlouisfed.org" target="_blank">FRED</a></p>
+    <p style="margin-top:4px">Built with Chart.js · No external dependencies</p>
+  </div>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATA (embedded from consumer_spending.db)
+// ═══════════════════════════════════════════════════════════
+const RAW = {
+  cpi_ts: [],
+  recession_cmp: [],
+  econ: [],
+  yoy: [],
+  monthly: []
+};
+
+// Injected data will be placed here
+</script>
+<script src="data.js"></script>
+<script>
+
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS & HELPERS
+// ═══════════════════════════════════════════════════════════
+const COLORS = {
+  'Food & Beverage': '#e8ff47',
+  'Housing': '#47c8ff',
+  'Medical Care': '#ff6b6b',
+  'Transportation': '#b47fff',
+  'Recreation': '#47ffb4',
+};
+const RECESSION_COLOR = 'rgba(255,107,107,0.08)';
+const CATS = ['Food & Beverage','Housing','Medical Care','Transportation','Recreation'];
+
+Chart.defaults.color = '#6b7a8d';
+Chart.defaults.borderColor = '#1e2730';
+Chart.defaults.font.family = "'DM Mono', monospace";
+Chart.defaults.font.size = 11;
+
+function getYears(data) { return [...new Set(data.map(r=>r[0]))].sort(); }
+
+function getCatData(cat) {
+  return RAW.cpi_ts.filter(r=>r[1]===cat).sort((a,b)=>a[0]-b[0]);
+}
+
+function makeRecessionPlugins(years, recessionYears) {
+  // Returns annotation-style background bands for recession years
+  // We'll do this manually via a custom plugin
+  return {
+    id: 'recessionBands',
+    beforeDraw(chart) {
+      const {ctx, chartArea, scales} = chart;
+      if (!chartArea) return;
+      const xScale = scales.x;
+      if (!xScale) return;
+      ctx.save();
+      recessionYears.forEach(yr => {
+        const idx = years.indexOf(yr);
+        if (idx < 0) return;
+        const x1 = xScale.getPixelForValue(idx - 0.5);
+        const x2 = xScale.getPixelForValue(idx + 0.5);
+        ctx.fillStyle = RECESSION_COLOR;
+        ctx.fillRect(x1, chartArea.top, x2-x1, chartArea.bottom - chartArea.top);
+      });
+      ctx.restore();
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// KPI CARDS
+// ═══════════════════════════════════════════════════════════
+function buildKPIs() {
+  const grid = document.getElementById('kpi-grid');
+  
+  // 1. Latest Medical Care CPI (2017)
+  const medLatest = RAW.cpi_ts.filter(r=>r[1]==='Medical Care'&&r[0]===2017);
+  // 2. Recession years count
+  const recYears = [...new Set(RAW.econ.filter(r=>r[3]===1).map(r=>r[0]))].length;
+  // 3. Peak unemployment
+  const peakUnemp = Math.max(...RAW.econ.map(r=>r[1]));
+  // 4. Food growth (1967→2017)
+  const food67 = RAW.cpi_ts.find(r=>r[1]==='Food & Beverage'&&r[0]===1967);
+  const food17 = RAW.cpi_ts.find(r=>r[1]==='Food & Beverage'&&r[0]===2017);
+  const foodGrowth = food67 && food17 ? ((food17[2]-food67[2])/food67[2]*100).toFixed(0) : '--';
+  // 5. Total CPI rows
+  const totalRows = 3289;
+  // 6. Year range
+  const allYears = RAW.cpi_ts.map(r=>r[0]);
+  const yearRange = Math.min(...allYears) + '–' + Math.max(...allYears);
+
+  const kpis = [
+    { label:'Medical CPI (2017)', value: medLatest[0]?medLatest[0][2].toFixed(1):'--', sub:'Index (1982–84=100)', color:'var(--medical)' },
+    { label:'Recession Periods', value: recYears, sub:'Years 1967–2017', color:'var(--accent3)' },
+    { label:'Peak Unemployment', value: peakUnemp+'%', sub:'1982 (worst year)', color:'var(--accent2)' },
+    { label:'Food Price Growth', value: foodGrowth+'%', sub:'1967 to 2017', color:'var(--food)' },
+    { label:'Total CPI Records', value: totalRows.toLocaleString(), sub:'Across 5 categories', color:'var(--accent5)' },
+    { label:'Data Coverage', value: yearRange, sub:'82-year span', color:'var(--accent4)' },
+  ];
+
+  grid.innerHTML = kpis.map((k,i) => `
+    <div class="kpi-card fade-in" style="--kpi-color:${k.color}">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// OVERVIEW CHART
+// ═══════════════════════════════════════════════════════════
+let overviewChart;
+function buildOverviewChart(filterCat='all') {
+  const ctx = document.getElementById('overviewChart').getContext('2d');
+  
+  const allYears = [...new Set(RAW.cpi_ts.map(r=>r[0]))].sort();
+  const recessionYears = [...new Set(RAW.cpi_ts.filter(r=>r[3]===1).map(r=>r[0]))];
+
+  const cats = filterCat==='all' ? CATS : [filterCat];
+  
+  const datasets = cats.map(cat => {
+    const catData = getCatData(cat);
+    const yearMap = {};
+    catData.forEach(r => yearMap[r[0]] = r[2]);
+    return {
+      label: cat,
+      data: allYears.map(y => yearMap[y] ?? null),
+      borderColor: COLORS[cat],
+      backgroundColor: COLORS[cat]+'22',
+      borderWidth: filterCat==='all' ? 1.5 : 2.5,
+      pointRadius: filterCat==='all' ? 0 : 3,
+      pointHoverRadius: 5,
+      tension: 0.3,
+      fill: filterCat!=='all',
+      spanGaps: true,
+    };
+  });
+
+  const recPlugin = makeRecessionPlugins(allYears, recessionYears);
+
+  if (overviewChart) overviewChart.destroy();
+  overviewChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: allYears, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 400 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#10141a',
+          borderColor: '#1e2730',
+          borderWidth: 1,
+          titleColor: '#e8edf4',
+          bodyColor: '#6b7a8d',
+          padding: 12,
+          callbacks: {
+            title: items => 'Year: ' + items[0].label,
+            label: item => ` ${item.dataset.label}: ${item.raw?.toFixed(1) ?? 'N/A'}`,
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: '#1e2730' }, ticks: { maxTicksLimit: 12 } },
+        y: { grid: { color: '#1e2730' }, title: { display: true, text: 'CPI Index (1982–84=100)' } }
+      }
+    },
+    plugins: [recPlugin]
+  });
+
+  // Update legend
+  const legendEl = document.getElementById('overview-legend');
+  legendEl.innerHTML = cats.map(c=>`
+    <div class="legend-item">
+      <span class="legend-line" style="background:${COLORS[c]}"></span>${c}
+    </div>
+  `).join('') + `<div class="legend-item"><span class="legend-dot" style="background:rgba(255,107,107,0.4)"></span>Recession</div>`;
+}
+
+function filterOverview(cat, btn) {
+  document.querySelectorAll('[data-cat]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  buildOverviewChart(cat);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SPARKLINES
+// ═══════════════════════════════════════════════════════════
+function buildSparklines() {
+  const grid = document.getElementById('sparklines');
+  
+  grid.innerHTML = CATS.map(cat => {
+    const data = getCatData(cat);
+    const val2017 = data.find(r=>r[0]===2017);
+    const val1967 = data.find(r=>r[0]===1967);
+    const totalGrowth = val2017 && val1967 ? ((val2017[2]-val1967[2])/val1967[2]*100).toFixed(1) : '--';
+    const isUp = parseFloat(totalGrowth) > 0;
+    return `
+      <div class="sparkline-card fade-in">
+        <div class="spark-label">${cat}</div>
+        <div class="spark-value" style="color:${COLORS[cat]}">${val2017?val2017[2].toFixed(1):'--'}</div>
+        <div class="spark-change ${isUp?'up':'down'}">${isUp?'▲':'▼'} ${totalGrowth}% since 1967</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// INDEXED GROWTH CHART
+// ═══════════════════════════════════════════════════════════
+function buildIndexedChart() {
+  const ctx = document.getElementById('indexedChart').getContext('2d');
+  const allYears = [...new Set(RAW.cpi_ts.map(r=>r[0]))].sort().filter(y=>y>=1967);
+  const recYears = [...new Set(RAW.cpi_ts.filter(r=>r[3]===1).map(r=>r[0]))];
+
+  const datasets = CATS.map(cat => {
+    const catData = getCatData(cat).filter(r=>r[0]>=1967);
+    const base = catData.find(r=>r[0]===1967);
+    const baseVal = base ? base[2] : null;
+    const yearMap = {};
+    catData.forEach(r => yearMap[r[0]] = baseVal ? (r[2]/baseVal*100) : null);
+    return {
+      label: cat,
+      data: allYears.map(y => yearMap[y] ?? null),
+      borderColor: COLORS[cat],
+      borderWidth: 1.8,
+      pointRadius: 0,
+      tension: 0.3,
+      spanGaps: true,
+    };
+  });
+
+  new Chart(ctx, {
+    type: 'line',
+    data: { labels: allYears, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, labels: { color: '#6b7a8d', boxWidth: 14, boxHeight: 2 } },
+        tooltip: {
+          backgroundColor: '#10141a', borderColor: '#1e2730', borderWidth: 1,
+          callbacks: { label: i => ` ${i.dataset.label}: ${i.raw?.toFixed(1)}` }
+        }
+      },
+      scales: {
+        x: { grid: { color: '#1e2730' }, ticks: { maxTicksLimit: 10 } },
+        y: { grid: { color: '#1e2730' }, title: { display: true, text: 'Index (1967 = 100)' } }
+      }
+    },
+    plugins: [makeRecessionPlugins(allYears, recYears)]
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// RECESSION CHARTS
+// ═══════════════════════════════════════════════════════════
+function buildRecessionBar() {
+  const ctx = document.getElementById('recessionBarChart').getContext('2d');
+  const cats = RAW.recession_cmp.map(r=>r[0]);
+  const recVals = RAW.recession_cmp.map(r=>r[2]);
+  const normVals = RAW.recession_cmp.map(r=>r[3]);
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: cats.map(c=>c.replace('& Beverage','\n& Beverage')),
+      datasets: [
+        { label:'Recession', data: recVals, backgroundColor: 'rgba(255,107,107,0.7)', borderColor: '#ff6b6b', borderWidth: 1 },
+        { label:'Normal', data: normVals, backgroundColor: 'rgba(71,200,255,0.4)', borderColor: '#47c8ff', borderWidth: 1 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#6b7a8d', boxWidth: 12 } },
+        tooltip: { backgroundColor: '#10141a', borderColor: '#1e2730', borderWidth: 1 }
+      },
+      scales: {
+        x: { grid: { color: '#1e2730' } },
+        y: { grid: { color: '#1e2730' }, title: { display: true, text: 'Avg CPI' } }
+      }
+    }
+  });
+}
+
+function buildRecessionPie() {
+  const ctx = document.getElementById('recessionPieChart').getContext('2d');
+  const cats = RAW.recession_cmp.map(r=>r[0]);
+  const recVals = RAW.recession_cmp.map(r=>r[2]);
+
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: cats,
+      datasets: [{ data: recVals, backgroundColor: CATS.map(c=>COLORS[c]+'cc'), borderColor: '#10141a', borderWidth: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#6b7a8d', boxWidth: 12, padding: 10 } },
+        tooltip: { backgroundColor: '#10141a', borderColor: '#1e2730', borderWidth: 1,
+          callbacks: { label: i => ` ${i.label}: ${i.raw}` }
+        }
+      }
+    }
+  });
+}
+
+function buildRecessionTable() {
+  const table = document.getElementById('recession-table');
+  const maxRec = Math.max(...RAW.recession_cmp.map(r=>r[2]));
+  table.innerHTML = `
+    <thead><tr>
+      <th>Category</th><th>Type</th><th>Recession Avg CPI</th><th>Normal Avg CPI</th><th>Difference</th>
+    </tr></thead>
+    <tbody>
+    ${RAW.recession_cmp.map(r=>{
+      const diff = (r[2]-r[3]).toFixed(1);
+      const pct = ((r[2]-r[3])/r[3]*100).toFixed(1);
+      const tagClass = r[1]==='Essential'?'tag-essential':'tag-discretionary';
+      const barW = (r[2]/maxRec*100).toFixed(0);
+      return `<tr>
+        <td style="color:${COLORS[r[0]]};font-weight:500">${r[0]}</td>
+        <td><span class="${tagClass}">${r[1]}</span></td>
+        <td class="num">
+          <div class="bar-cell">
+            <span>${r[2]}</span>
+            <div class="bar-bg"><div class="bar-fill" style="width:${barW}%;background:${COLORS[r[0]]}"></div></div>
+          </div>
+        </td>
+        <td class="num">${r[3]}</td>
+        <td class="num" style="color:var(--accent3)">+${diff} (+${pct}%)</td>
+      </tr>`;
+    }).join('')}
+    </tbody>`;
+}
+
+let recessionZoomChart;
+function buildRecessionZoomChart(cat) {
+  const ctx = document.getElementById('recessionZoomChart').getContext('2d');
+  const filtered = RAW.monthly.filter(r=>r[2]===cat).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  const labels = filtered.map(r=>`${r[0]}-${String(r[1]).padStart(2,'0')}`);
+  const vals = filtered.map(r=>r[3]);
+  const recFlags = filtered.map(r=>r[4]);
+
+  // Build recession bands based on index
+  const recBands = {
+    id:'recZoomBands',
+    beforeDraw(chart) {
+      const {ctx:c, chartArea, scales} = chart;
+      if(!chartArea) return;
+      c.save();
+      recFlags.forEach((flag, i) => {
+        if(!flag) return;
+        const x1 = scales.x.getPixelForValue(i-0.5);
+        const x2 = scales.x.getPixelForValue(i+0.5);
+        c.fillStyle = 'rgba(255,107,107,0.12)';
+        c.fillRect(x1, chartArea.top, x2-x1, chartArea.bottom-chartArea.top);
+      });
+      c.restore();
+    }
+  };
+
+  if (recessionZoomChart) recessionZoomChart.destroy();
+  recessionZoomChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: cat,
+        data: vals,
+        borderColor: COLORS[cat],
+        backgroundColor: COLORS[cat]+'22',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        fill: true,
+        tension: 0.2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor:'#10141a', borderColor:'#1e2730', borderWidth:1,
+          callbacks: { title: i => i[0].label, label: i => ` CPI: ${i.raw}` }
+        }
+      },
+      scales: {
+        x: { grid:{color:'#1e2730'}, ticks:{maxTicksLimit:12} },
+        y: { grid:{color:'#1e2730'}, title:{display:true, text:'CPI Index'} }
+      }
+    },
+    plugins: [recBands]
+  });
+}
+
+function updateRecessionZoom() {
+  buildRecessionZoomChart(document.getElementById('recession-zoom-cat').value);
+}
+
+// ═══════════════════════════════════════════════════════════
+// ECONOMIC INDICATORS CHART
+// ═══════════════════════════════════════════════════════════
+function buildEconChart() {
+  const ctx = document.getElementById('econChart').getContext('2d');
+  const years = RAW.econ.map(r=>r[0]);
+  const unemp = RAW.econ.map(r=>r[1]);
+  const gdp = RAW.econ.map(r=>r[2]);
+  const recYears = RAW.econ.filter(r=>r[3]===1).map(r=>r[0]);
+
+  const recPlugin = {
+    id:'econRecBands',
+    beforeDraw(chart) {
+      const {ctx:c,chartArea,scales} = chart;
+      if(!chartArea) return;
+      c.save();
+      recYears.forEach(yr=>{
+        const i = years.indexOf(yr);
+        if(i<0) return;
+        const x1 = scales.x.getPixelForValue(i-0.5);
+        const x2 = scales.x.getPixelForValue(i+0.5);
+        c.fillStyle = 'rgba(255,107,107,0.1)';
+        c.fillRect(x1,chartArea.top,x2-x1,chartArea.bottom-chartArea.top);
+      });
+      c.restore();
+    }
+  };
+
+  new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: years,
+      datasets:[
+        { label:'Unemployment (%)', data:unemp, borderColor:'#47c8ff', borderWidth:2, pointRadius:3, yAxisID:'y', tension:0.3, fill:false },
+        { label:'GDP Growth (%)', data:gdp, borderColor:'#47ffb4', borderWidth:2, pointRadius:3, yAxisID:'y2', tension:0.3, fill:false }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{labels:{color:'#6b7a8d',boxWidth:14}},
+        tooltip:{backgroundColor:'#10141a',borderColor:'#1e2730',borderWidth:1}
+      },
+      scales:{
+        x:{grid:{color:'#1e2730'}},
+        y:{grid:{color:'#1e2730'},title:{display:true,text:'Unemployment (%)'},position:'left'},
+        y2:{grid:{display:false},title:{display:true,text:'GDP Growth (%)'},position:'right'}
+      }
+    },
+    plugins:[recPlugin]
+  });
+}
+
+function buildScatterChart() {
+  const ctx = document.getElementById('scatterChart').getContext('2d');
+  
+  // Join econ with avg CPI per year
+  const cpiByYear = {};
+  RAW.cpi_ts.filter(r=>r[1]==='Food & Beverage').forEach(r => cpiByYear[r[0]] = r[2]);
+  
+  const normalPts = [];
+  const recPts = [];
+  RAW.econ.forEach(r => {
+    const cpi = cpiByYear[r[0]];
+    if (cpi === undefined) return;
+    const pt = { x: r[1], y: cpi, year: r[0] };
+    if (r[3]===1) recPts.push(pt); else normalPts.push(pt);
+  });
+
+  new Chart(ctx, {
+    type:'scatter',
+    data:{
+      datasets:[
+        { label:'Normal Year', data:normalPts, backgroundColor:'rgba(71,200,255,0.5)', borderColor:'#47c8ff', borderWidth:1, pointRadius:6 },
+        { label:'Recession Year', data:recPts, backgroundColor:'rgba(255,107,107,0.7)', borderColor:'#ff6b6b', borderWidth:1, pointRadius:8, pointStyle:'triangle' }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#6b7a8d',boxWidth:12}},
+        tooltip:{
+          backgroundColor:'#10141a', borderColor:'#1e2730', borderWidth:1,
+          callbacks:{
+            label: item => {
+              const d = item.raw;
+              return ` ${d.year}: Unemp ${d.x}% · Food CPI ${d.y}`;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{grid:{color:'#1e2730'}, title:{display:true,text:'Unemployment Rate (%)'}},
+        y:{grid:{color:'#1e2730'}, title:{display:true,text:'Food & Beverage CPI'}}
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// YOY CHART
+// ═══════════════════════════════════════════════════════════
+let yoyChart, yoyType = 'bar';
+function buildYOYChart(cat) {
+  const ctx = document.getElementById('yoyChart').getContext('2d');
+  const filtered = RAW.yoy.filter(r=>r[1]===cat&&r[3]!==null).sort((a,b)=>a[0]-b[0]);
+  const years = filtered.map(r=>r[0]);
+  const vals = filtered.map(r=>r[3]);
+  const color = COLORS[cat];
+
+  if (yoyChart) yoyChart.destroy();
+  yoyChart = new Chart(ctx, {
+    type: yoyType,
+    data:{
+      labels: years,
+      datasets:[{
+        label:'YOY % Change',
+        data: vals,
+        backgroundColor: vals.map(v=>v>=0 ? color+'88' : '#ff6b6b88'),
+        borderColor: vals.map(v=>v>=0 ? color : '#ff6b6b'),
+        borderWidth: 1.5,
+        borderRadius: yoyType==='bar' ? 2 : 0,
+        pointRadius: yoyType==='line' ? 3 : 0,
+        tension: 0.3,
+        fill: yoyType==='line',
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#10141a', borderColor:'#1e2730', borderWidth:1,
+          callbacks:{label:i=>` ${i.raw?.toFixed(2)}% YOY`}
+        }
+      },
+      scales:{
+        x:{grid:{color:'#1e2730'}, ticks:{maxTicksLimit:15}},
+        y:{grid:{color:'#1e2730'}, title:{display:true,text:'YOY % Change'}}
+      }
+    }
+  });
+}
+
+function updateYOY() { buildYOYChart(document.getElementById('yoy-cat-select').value); }
+
+function setYOYView(type, btn) {
+  document.querySelectorAll('#yoy ~ .chart-card .btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  yoyType = type;
+  updateYOY();
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOP INFLATION TABLE
+// ═══════════════════════════════════════════════════════════
+function buildTopInflation(cat) {
+  const table = document.getElementById('top-inflation-table');
+  const filtered = RAW.yoy.filter(r=>r[1]===cat&&r[3]!==null)
+    .sort((a,b)=>b[3]-a[3])
+    .slice(0,10);
+  
+  const maxVal = filtered[0]?.[3] ?? 1;
+  table.innerHTML = `
+    <thead><tr><th>Rank</th><th>Year</th><th>YOY % Change</th><th>CPI Value</th></tr></thead>
+    <tbody>
+    ${filtered.map((r,i)=>{
+      const barW = (r[3]/maxVal*100).toFixed(0);
+      return `<tr>
+        <td style="color:var(--text-muted)">#${i+1}</td>
+        <td style="color:${COLORS[cat]}">${r[0]}</td>
+        <td>
+          <div class="bar-cell">
+            <span class="num" style="min-width:55px">${r[3].toFixed(2)}%</span>
+            <div class="bar-bg"><div class="bar-fill" style="width:${barW}%;background:${COLORS[cat]}"></div></div>
+          </div>
+        </td>
+        <td class="num">${r[2].toFixed(1)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody>`;
+}
+
+function updateTopInflation() { buildTopInflation(document.getElementById('top-cat-select').value); }
+
+// ═══════════════════════════════════════════════════════════
+// NAV ACTIVE STATE
+// ═══════════════════════════════════════════════════════════
+function initNav() {
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('nav a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => {
+          a.classList.toggle('active', a.getAttribute('href') === '#'+e.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  sections.forEach(s => observer.observe(s));
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  buildKPIs();
+  buildOverviewChart();
+  buildSparklines();
+  buildIndexedChart();
+  buildRecessionBar();
+  buildRecessionPie();
+  buildRecessionTable();
+  buildRecessionZoomChart('Food & Beverage');
+  buildEconChart();
+  buildScatterChart();
+  buildYOYChart('Food & Beverage');
+  buildTopInflation('Medical Care');
+  initNav();
+});
+</script>
+</body>
+</html>
